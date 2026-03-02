@@ -234,52 +234,196 @@ Registros disponibles en `/diary`.
 
 ---
 
-# 🇬🇧 English
+# 🇺🇸 English
 
-## 📌 Project Overview
+## 📌 Project Description
 
-Client-server system developed in Python implementing:
+Client-server system developed in Python that implements:
 
-- 🔐 TLS encrypted communication
+- 🔐 Encrypted communication using TLS
 - 👤 Mandatory authentication
 - 👥 Role-Based Access Control (RBAC)
-- 🗄 MySQL persistence
+- 🗄 MySQL database persistence
 - 📝 Audit logging
-- ⚙ Robust error handling
+- ⚙ Robust error and disconnection handling
 
 Developed following **Personal Software Process (PSP)** principles.
 
 ---
 
-## ⚙ Installation
+## 🏗 System Architecture
+
+```
+Client (CLI)
+      │
+      │  TCP + TLS
+      ▼
+Secure Server
+      │
+      ▼
+Database
+(Users - Roles - Logs)
+```
+
+---
+
+## 📂 Project Structure
+
+```
+PSP-TRUCKS/
+│
+├── client/                # CLI Client
+│   └── client.py
+│
+├── server/                # TCP + TLS Server
+│   └── server.py
+│
+├── database/              # SQL Scripts
+│   ├── schema.sql
+│   └── seed.sql
+│
+├── docs/                  # Technical Documentation
+│   ├── requisitos.md
+│   ├── diseño.md
+│   └── manual_usuario.md
+│
+├── diary/                 # PSP Log
+│   └── psp_log.md
+│
+├── certs/                 # TLS Certificates
+├── logs/                  # Audit Logs
+│
+├── .gitignore
+├── LICENSE
+└── README.md
+```
+
+---
+
+# ⚙ Step-by-Step Installation
+
+## 1️⃣ Clone repository
 
 ```bash
-git clone https://github.com/<user>/<repo>.git
-cd <repo>
+git clone https://github.com/<usuario>/<repositorio>.git
+cd <repositorio>
+```
 
-python -m venv venv
+## 2️⃣ Create virtual environment
+
+```bash
+python3 -m venv venv
 source venv/bin/activate
+```
 
+## 3️⃣ Install dependencies
+
+```bash
 pip install -r requirements.txt
+```
 
+## 4️⃣ Configure Database
+
+```sql
+CREATE DATABASE proyecto_psp;
+```
+
+```bash
+mysql -u <usuario> -p proyecto_psp < database/schema.sql
+```
+
+## 5️⃣ Generate TLS certificates
+
+```bash
+mkdir certs
 openssl req -x509 -newkey rsa:4096 -keyout certs/server.key -out certs/server.crt -days 365 -nodes
+```
 
+## 6️⃣ Run server
+
+```bash
 python server/server.py
+```
+
+## 7️⃣ Run client
+
+```bash
 python client/client.py
 ```
 
 ---
 
-# 🎤 Defense Talking Points
+# 🔄 Communication Protocol (JSON)
 
-- Why TLS? → Protect confidentiality and integrity.
-- Why hashing? → Avoid plaintext password storage.
-- Why RBAC? → Separation of privileges.
-- Why audit logs? → Traceability and accountability.
-- Why client-server architecture? → Centralized control and security.
+All messages use UTF-8 encoded JSON format.
+
+### Example Login Request
+
+```json
+{
+  "type": "login",
+  "username": "admin",
+  "password": "*****"
+}
+```
+
+### Server Response
+
+```json
+{
+  "status": "success",
+  "role": "admin"
+}
+```
 
 ---
 
-# 📄 License
+# 🗄 Database Model
 
-MIT License.
+## users Table
+
+- id
+- username
+- password_hash
+- role_id
+
+## roles Table
+
+- id
+- name
+
+## audit_logs Table
+
+- id
+- user_id
+- action
+- timestamp
+
+---
+
+# 🔐 Security Model
+
+| Layer        | Implementation        |
+|--------------|----------------------|
+| Transport    | TLS over TCP         |
+| Credentials  | Secure hashing       |
+| Authorization| RBAC                 |
+| Auditing     | Persistent logging   |
+| Session      | Controlled management|
+
+---
+
+# 📊 PSP Methodology
+
+The project includes:
+
+- Time tracking
+- Defect tracking
+- Incremental planning
+- Structured documentation
+
+Logs available in `/diary`.
+
+---
+
+LICENSE MIT

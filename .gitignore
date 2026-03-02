@@ -205,3 +205,23 @@ cython_debug/
 marimo/_static/
 marimo/_lsp/
 __marimo__/
+
+# Certificados TLS
+*.crt
+*.key
+*.pem
+
+# Variables de entorno
+.env
+
+# Logs
+*.log
+logs/
+
+# Base de datos local
+*.db
+*.sqlite3
+
+# IDE
+.vscode/
+.idea/

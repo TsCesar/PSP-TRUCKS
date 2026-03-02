@@ -28,7 +28,14 @@
   - Seguridad
   - Metodología PSP
 - [🇬🇧 English](#-english)
-
+  - Description
+  - Architecture
+  - Project Structure
+  - Installation
+  - JSON Protocol
+  - Database Model
+  - Security
+  - PSP Methodology
 ---
 
 ---

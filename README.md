@@ -1,243 +1,278 @@
-# PSP-TRUCKS
-🔐 Sistema cliente-servidor desarrollado en Python que implementa comunicación cifrada mediante TLS, autenticación segura, gestión de sesiones y control de acceso por roles (RBAC), con persistencia en base de datos y registro de auditoría, diseñado para aplicar buenas prácticas en seguridad y arquitectura de aplicaciones distribuidas.
-🔐 Client-server system developed in Python that implements encrypted communication using TLS, secure authentication, session management, and Role-Based Access Control (RBAC), with database persistence and audit logging, designed to apply best practices in security and distributed application architecture.
+# 🚛 PSP-TRUCKS
 
-🔐 Sistema Cliente-Servidor Seguro en Python
-🔐 Secure Client-Server System in Python
 <p align="center">
-
-
-
-
-
-
-
-
-
-
-
-
+  <b>Secure Client-Server System in Python</b><br>
+  <i>Academic project focused on secure distributed architecture and PSP methodology</i>
 </p>
-🇪🇸 ESPAÑOL
-📌 Descripción del Proyecto
 
-Este proyecto consiste en el desarrollo de una aplicación de consola basada en una arquitectura cliente-servidor, implementada íntegramente en Python, que utiliza sockets TCP con comunicaciones cifradas mediante TLS.
+---
 
-El sistema implementa:
+![Python](https://img.shields.io/badge/Python-3.x-blue?logo=python)
+![Architecture](https://img.shields.io/badge/Architecture-Client--Server-informational)
+![Security](https://img.shields.io/badge/TLS-Encrypted-green)
+![Access](https://img.shields.io/badge/RBAC-Enabled-orange)
+![Database](https://img.shields.io/badge/Database-MySQL-blue)
+![License](https://img.shields.io/badge/License-MIT-yellow)
 
-Autenticación obligatoria de usuarios
+---
 
-Control de acceso basado en roles (RBAC)
+# 📑 Table of Contents
 
-Gestión de sesiones
+- [🇪🇸 Español](#-español)
+  - Descripción
+  - Arquitectura
+  - Estructura del Proyecto
+  - Instalación
+  - Protocolo JSON
+  - Modelo de Base de Datos
+  - Seguridad
+  - Metodología PSP
+- [🇬🇧 English](#-english)
 
-Persistencia en base de datos MySQL
+---
 
-Registro de auditoría de eventos
+---
 
-Manejo robusto de errores y desconexiones
+# 🇪🇸 Español
 
-El desarrollo sigue los principios de la metodología PSP (Personal Software Process).
+## 📌 Descripción del Proyecto
 
-🎯 Objetivos Académicos
+Sistema cliente-servidor desarrollado en Python que implementa:
 
-El sistema cumple con los requisitos establecidos:
+- 🔐 Comunicación cifrada mediante TLS
+- 👤 Autenticación obligatoria
+- 👥 Control de acceso por roles (RBAC)
+- 🗄 Persistencia en base de datos MySQL
+- 📝 Registro de auditoría
+- ⚙ Manejo robusto de errores y desconexiones
 
-✔ Aplicación cliente-servidor en consola
-✔ Comunicación segura sobre TCP mediante TLS
-✔ Autenticación previa antes de ejecutar comandos
-✔ Gestión de roles y permisos
-✔ Registro estructurado de auditoría
-✔ Documentación técnica formal
-✔ Organización profesional del repositorio
+Desarrollado siguiendo principios de **Personal Software Process (PSP)**.
 
-🏗 Arquitectura del Sistema
+---
+
+## 🏗 Arquitectura del Sistema
+
+```
 Cliente (CLI)
-        │
-        │ TCP + TLS
-        ▼
+      │
+      │  TCP + TLS
+      ▼
 Servidor Seguro
-        │
-        ▼
+      │
+      ▼
 Base de Datos
-(Usuarios – Roles – Logs)
-🔹 Cliente
+(Usuarios - Roles - Logs)
+```
 
-Interfaz interactiva en línea de comandos
+---
 
-Envía peticiones JSON al servidor
+## 📂 Estructura del Proyecto
 
-Gestiona sesión autenticada
+```
+PSP-TRUCKS/
+│
+├── client/                # Cliente CLI
+│   └── client.py
+│
+├── server/                # Servidor TCP + TLS
+│   └── server.py
+│
+├── database/              # Scripts SQL
+│   ├── schema.sql
+│   └── seed.sql
+│
+├── docs/                  # Documentación técnica
+│   ├── requisitos.md
+│   ├── diseño.md
+│   └── manual_usuario.md
+│
+├── diary/                 # Registro PSP
+│   └── psp_log.md
+│
+├── certs/                 # Certificados TLS
+├── logs/                  # Logs de auditoría
+│
+├── .gitignore
+├── LICENSE
+└── README.md
+```
 
-🔹 Servidor
+---
 
-Escucha conexiones TCP
+# ⚙ Instalación Paso a Paso
 
-Establece canal cifrado TLS
+## 1️⃣ Clonar repositorio
 
-Valida credenciales
-
-Aplica control RBAC
-
-Registra eventos en auditoría
-
-🔹 Base de Datos
-
-Usuarios
-
-Roles
-
-Hashes de contraseñas
-
-Logs de actividad
-
-🔐 Seguridad Implementada
-🔒 Comunicación Cifrada
-
-Uso del módulo ssl de Python para proteger la transmisión de datos.
-
-🔑 Gestión Segura de Contraseñas
-
-Las contraseñas se almacenan mediante hashing seguro.
-No se almacenan credenciales en texto plano.
-
-👥 Control de Acceso por Roles
-
-Cada usuario posee un rol que determina los comandos permitidos.
-
-📝 Auditoría
-
-Se registran:
-
-Intentos de autenticación
-
-Comandos ejecutados
-
-Accesos denegados
-
-Errores del sistema
-
-📂 Estructura del Repositorio
-client/
-server/
-database/
-docs/
-diary/
-certs/
-logs/
-README.md
-LICENSE
-.gitignore
-⚙️ Instalación Paso a Paso
-1️⃣ Clonar el repositorio
+```bash
 git clone https://github.com/<usuario>/<repositorio>.git
 cd <repositorio>
-2️⃣ Crear entorno virtual
-Linux / macOS
+```
+
+## 2️⃣ Crear entorno virtual
+
+```bash
 python3 -m venv venv
 source venv/bin/activate
-Windows
-python -m venv venv
-.\venv\Scripts\activate
-3️⃣ Instalar dependencias
+```
+
+## 3️⃣ Instalar dependencias
+
+```bash
 pip install -r requirements.txt
-4️⃣ Configurar base de datos MySQL
+```
 
-Crear base de datos:
+## 4️⃣ Configurar Base de Datos
 
+```sql
 CREATE DATABASE proyecto_psp;
+```
 
-Ejecutar esquema:
-
+```bash
 mysql -u <usuario> -p proyecto_psp < database/schema.sql
+```
 
-(Opcional) Cargar datos iniciales:
+## 5️⃣ Generar certificados TLS
 
-mysql -u <usuario> -p proyecto_psp < database/seed.sql
-5️⃣ Generar certificados TLS (entorno académico)
+```bash
 mkdir certs
 openssl req -x509 -newkey rsa:4096 -keyout certs/server.key -out certs/server.crt -days 365 -nodes
-6️⃣ Ejecutar servidor
+```
+
+## 6️⃣ Ejecutar servidor
+
+```bash
 python server/server.py
-7️⃣ Ejecutar cliente
+```
 
-En otra terminal:
+## 7️⃣ Ejecutar cliente
 
+```bash
 python client/client.py
-8️⃣ Prueba de funcionamiento
+```
 
-Iniciar sesión
+---
 
-Ejecutar comando permitido
+# 🔄 Protocolo de Comunicación (JSON)
 
-Verificar logs de auditoría
+Todos los mensajes utilizan formato JSON codificado en UTF-8.
 
-📊 Metodología PSP
+### Ejemplo Login Request
+
+```json
+{
+  "type": "login",
+  "username": "admin",
+  "password": "*****"
+}
+```
+
+### Respuesta del Servidor
+
+```json
+{
+  "status": "success",
+  "role": "admin"
+}
+```
+
+---
+
+# 🗄 Modelo de Base de Datos
+
+## Tabla users
+
+- id
+- username
+- password_hash
+- role_id
+
+## Tabla roles
+
+- id
+- name
+
+## Tabla audit_logs
+
+- id
+- user_id
+- action
+- timestamp
+
+---
+
+# 🔐 Modelo de Seguridad
+
+| Capa | Implementación |
+|------|---------------|
+| Transporte | TLS sobre TCP |
+| Credenciales | Hashing seguro |
+| Autorización | RBAC |
+| Auditoría | Registro persistente |
+| Sesión | Gestión controlada |
+
+---
+
+# 📊 Metodología PSP
 
 El proyecto incluye:
 
-Registro de tiempos
+- Registro de tiempos
+- Seguimiento de defectos
+- Planificación incremental
+- Documentación estructurada
 
-Seguimiento de defectos
+Registros disponibles en `/diary`.
 
-Planificación incremental
+---
 
-Documentación estructurada
+---
 
-Los registros se encuentran en /diary.
+# 🇬🇧 English
 
-📄 Licencia
+## 📌 Project Overview
 
-MIT License.
+Client-server system developed in Python implementing:
 
-🇬🇧 ENGLISH
-📌 Project Overview
+- 🔐 TLS encrypted communication
+- 👤 Mandatory authentication
+- 👥 Role-Based Access Control (RBAC)
+- 🗄 MySQL persistence
+- 📝 Audit logging
+- ⚙ Robust error handling
 
-Console-based client-server application developed entirely in Python, using TCP sockets secured with TLS.
+Developed following **Personal Software Process (PSP)** principles.
 
-The system includes:
+---
 
-Mandatory authentication
+## ⚙ Installation
 
-Role-Based Access Control (RBAC)
-
-Session management
-
-MySQL database persistence
-
-Audit logging
-
-Robust error handling
-
-Development follows Personal Software Process (PSP) principles.
-
-🎯 Academic Objectives
-
-✔ Console-based client-server application
-✔ Secure TCP communication using TLS
-✔ Authentication before command execution
-✔ Role-based access control
-✔ Structured audit logging
-✔ Formal documentation
-
-⚙️ Installation (Step-by-Step)
-1️⃣ Clone repository
+```bash
 git clone https://github.com/<user>/<repo>.git
 cd <repo>
-2️⃣ Create virtual environment
+
 python -m venv venv
 source venv/bin/activate
-3️⃣ Install dependencies
+
 pip install -r requirements.txt
-4️⃣ Configure MySQL
-CREATE DATABASE proyecto_psp;
-mysql -u <user> -p proyecto_psp < database/schema.sql
-5️⃣ Generate TLS certificates
+
 openssl req -x509 -newkey rsa:4096 -keyout certs/server.key -out certs/server.crt -days 365 -nodes
-6️⃣ Run server
+
 python server/server.py
-7️⃣ Run client
 python client/client.py
-📄 License
+```
+
+---
+
+# 🎤 Defense Talking Points
+
+- Why TLS? → Protect confidentiality and integrity.
+- Why hashing? → Avoid plaintext password storage.
+- Why RBAC? → Separation of privileges.
+- Why audit logs? → Traceability and accountability.
+- Why client-server architecture? → Centralized control and security.
+
+---
+
+# 📄 License
 
 MIT License.

@@ -368,9 +368,10 @@ def action_truck_status(sock: ssl.SSLSocket) -> None:
     Muestra la flota desde MySQL y permite buscar por código (T001)
     o ID completo (TRUCK-001). Bucle hasta introducir 0.
 
-    Si el camión no está en la lista local (por ejemplo, se acaba de añadir),
-    se envía la consulta directamente al servidor. Así siempre se detectan
-    los camiones recién añadidos sin tener que salir y volver a entrar.
+    El input del usuario se manda SIEMPRE directamente al servidor sin
+    filtrar en local. El servidor busca en MySQL por code O truck_id,
+    así funciona con cualquier camión, incluidos los recién añadidos.
+    La lista local solo se usa para mostrar el catálogo en pantalla.
     """
     last_result = None
 
@@ -394,12 +395,10 @@ def action_truck_status(sock: ssl.SSLSocket) -> None:
         if not query:
             continue
 
-        # Buscar en la lista local primero para obtener el truck_id canónico.
-        # Si no está (camión recién añadido en esta sesión), usar el query
-        # directamente: el servidor buscará por código o ID en MySQL.
-        truck_id = find_truck_in_list(query, trucks) or query.upper()
-
-        send_command(sock, build_message("truck_status", {"truck_id": truck_id}))
+        # Mandar directamente al servidor — él busca en MySQL por code O truck_id.
+        # No filtramos en el cliente para evitar falsos negativos con camiones
+        # recién añadidos que aún no estaban en la lista cuando se cargó.
+        send_command(sock, build_message("truck_status", {"truck_id": query}))
         last_result = handle_server_response(receive_response(sock))
 
 

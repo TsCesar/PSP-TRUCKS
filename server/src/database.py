@@ -183,10 +183,12 @@ def get_truck_by_query(query: str) -> dict | None:
     try:
         conn   = get_connection()
         cursor = conn.cursor(dictionary=True)
+        # UPPER() en SQL garantiza coincidencia sin importar cómo
+        # esté almacenado el valor ni la collation de la columna.
         cursor.execute(
             "SELECT id, code, truck_id, description, status, location "
-            "FROM trucks WHERE code = %s OR truck_id = %s LIMIT 1",
-            (query.upper(), query.upper())
+            "FROM trucks WHERE UPPER(code) = %s OR UPPER(truck_id) = %s LIMIT 1",
+            (query.strip().upper(), query.strip().upper())
         )
         return cursor.fetchone()
     except MySQLError as e:

@@ -374,22 +374,25 @@ def process_message(message: dict, client_addr: tuple) -> tuple:
                               data=visible), session
 
     elif command == "truck_status":
-        truck_id = data.get("truck_id")
-        if not truck_id:
+        query = data.get("truck_id", "").strip()
+        if not query:
             return build_response("error", "Falta el campo 'truck_id'."), session
 
-        simulated = {
-            "TRUCK-001": {"status": "available",   "location": "León"},
-            "TRUCK-002": {"status": "in_transit",  "location": "Madrid"},
-            "TRUCK-003": {"status": "maintenance", "location": "Taller Central"},
-        }
-        if truck_id in simulated:
+        # Consulta MySQL — busca por código corto (T001) o ID completo (TRUCK-001)
+        truck = get_truck_by_query(query)
+        if truck:
             return build_response(
                 "success",
-                f"Estado de '{truck_id}' consultado correctamente.",
-                data={"truck_id": truck_id, **simulated[truck_id]},
+                f"Estado de '{truck['truck_id']}' consultado correctamente.",
+                data={
+                    "code"       : truck["code"],
+                    "truck_id"   : truck["truck_id"],
+                    "description": truck["description"],
+                    "status"     : truck["status"],
+                    "location"   : truck["location"],
+                },
             ), session
-        return build_response("error", f"Camión '{truck_id}' no encontrado."), session
+        return build_response("error", f"Camión '{query}' no encontrado."), session
 
     elif command == "create_user":
         return handle_create_user(data, session, ip_str), session

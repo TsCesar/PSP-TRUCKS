@@ -1,14 +1,17 @@
 # =============================================================================
 # PSP-TRUCKS — Control de acceso basado en roles (RBAC)
 # server/src/rbac.py
-# Fase 1 — Paso 5
+# Fase 2 — Paso 3
 #
-# Responsabilidad única: definir y verificar permisos por rol.
-# No contiene lógica de red, BD ni autenticación.
+# Responsabilidad unica: definir y verificar permisos por rol.
+# No contiene logica de red, BD ni autenticacion.
 #
-# Política de permisos:
-#   user  → ping, help, truck_status, logout
-#   admin → todo lo anterior + create_user
+# Politica de permisos:
+#   user  → ping, help, logout
+#             list_trucks, truck_detail, create_truck, update_truck, delete_truck
+#             aliases de compatibilidad: truck_status, add_truck
+#   admin → todo lo anterior + list_users, create_user, delete_user
+#             list_audit_logs, filter_audit_logs_by_user
 # =============================================================================
 
 import logging
@@ -23,23 +26,37 @@ PERMISSIONS: dict[str, set] = {
     "user": {
         "ping",
         "help",
-        "truck_status",
         "logout",
-        "add_truck",        # Cualquier usuario autenticado puede gestionar camiones
+        # trucks — Fase 2 nombres definitivos
+        "list_trucks",
+        "truck_detail",
+        "create_truck",
+        "update_truck",
         "delete_truck",
-        "list_trucks",      # Uso interno del cliente para mostrar la flota
+        # aliases Fase 1 (compatibilidad hacia atras)
+        "truck_status",
+        "add_truck",
     },
     "admin": {
         "ping",
         "help",
-        "truck_status",
         "logout",
-        "add_truck",
-        "delete_truck",
-        "create_user",      # Exclusivo de admin
-        "delete_user",      # Exclusivo de admin (nunca elimina 'admin')
+        # trucks — Fase 2 nombres definitivos
         "list_trucks",
-        "list_users",       # Solo admin puede listar usuarios
+        "truck_detail",
+        "create_truck",
+        "update_truck",
+        "delete_truck",
+        # aliases Fase 1 (compatibilidad hacia atras)
+        "truck_status",
+        "add_truck",
+        # usuarios — exclusivo admin
+        "create_user",
+        "delete_user",
+        "list_users",
+        # auditoria — exclusivo admin
+        "list_audit_logs",
+        "filter_audit_logs_by_user",
     },
 }
 

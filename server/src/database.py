@@ -1,20 +1,23 @@
 # =============================================================================
 # PSP-TRUCKS — Módulo de Base de Datos
 # server/src/database.py
-# Fase 1 — Paso 5
+# Fase 2 — Paso 3
 #
-# Añadido respecto al Paso 4:
-#   - get_role_id_by_name() → obtiene el ID de un rol por su nombre
-#   - create_user()         → inserta un nuevo usuario con hash bcrypt
+# Variables de entorno (opcional — si no se definen se usan los valores XAMPP):
+#   DB_HOST / DB_PORT / DB_NAME / DB_USER / DB_PASSWORD
 #
-# Variables de entorno requeridas:
-#   PowerShell:  $env:DB_HOST / $env:DB_NAME / $env:DB_USER / $env:DB_PASSWORD
-#   Bash:        export DB_HOST / DB_NAME / DB_USER / DB_PASSWORD
+# Convención de retorno en funciones de escritura:
+#   {"success": True}                  → operación OK
+#   {"success": False, "error": "..."}  → error controlado
+#
+# get_all_trucks() retorna None en error de BD y [] si la flota está vacía,
+# para que el servidor pueda distinguir ambos casos.
 # =============================================================================
 
 import os
 import logging
 import mysql.connector
+from datetime import datetime as _dt
 from mysql.connector import Error as MySQLError
 
 logger = logging.getLogger("PSP-TRUCKS-DB")
@@ -26,6 +29,24 @@ DB_CONFIG = {
     "user"    : os.getenv("DB_USER",     "root"),
     "password": os.getenv("DB_PASSWORD", ""),
 }
+
+PROTECTED_USERS = {"admin"}
+
+
+# -----------------------------------------------------------------------------
+# Helper interno
+# -----------------------------------------------------------------------------
+
+def _row_to_json(row: dict) -> dict:
+    """
+    Convierte los campos datetime de una fila MySQL a string ISO
+    para que json.dumps() pueda serializarlos sin TypeError.
+    Aplica a created_at y updated_at devueltos por mysql-connector-python.
+    """
+    return {
+        k: (v.strftime("%Y-%m-%d %H:%M:%S") if isinstance(v, _dt) else v)
+        for k, v in row.items()
+    }
 
 
 # -----------------------------------------------------------------------------
@@ -45,7 +66,7 @@ def test_connection() -> bool:
         conn = get_connection()
         conn.close()
         logger.info(
-            f"Conexión MySQL verificada — "
+            f"Conexion MySQL verificada — "
             f"{DB_CONFIG['user']}@{DB_CONFIG['host']}:{DB_CONFIG['port']}"
             f"/{DB_CONFIG['database']}"
         )
@@ -58,16 +79,52 @@ def test_connection() -> bool:
         return False
 
 
+def validate_trucks_schema() -> bool:
+    """
+    Verifica que la tabla trucks tiene el esquema correcto para Fase 2.
+    Retorna False y loguea las columnas faltantes si el esquema es incorrecto.
+    """
+    REQUIRED = {
+        "id", "plate_number", "model", "capacity_kg",
+        "status", "current_location", "created_at", "updated_at",
+    }
+    conn = cursor = None
+    try:
+        conn   = get_connection()
+        cursor = conn.cursor()
+        cursor.execute(
+            "SELECT COLUMN_NAME FROM INFORMATION_SCHEMA.COLUMNS "
+            "WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = 'trucks'"
+        )
+        existing = {row[0] for row in cursor.fetchall()}
+        missing  = REQUIRED - existing
+        if missing:
+            logger.error(
+                f"Tabla 'trucks' con esquema incorrecto para Fase 2. "
+                f"Columnas faltantes: {', '.join(sorted(missing))}. "
+                f"Ejecuta: mysql -u root psp_trucks < database/reset_trucks_phase2.sql"
+            )
+            return False
+        logger.info("Esquema de la tabla 'trucks' verificado.")
+        return True
+    except MySQLError as e:
+        logger.error(f"Error al verificar esquema de trucks: {e}")
+        return False
+    finally:
+        if cursor: cursor.close()
+        if conn:   conn.close()
+
+
 # -----------------------------------------------------------------------------
-# Consultas de usuarios
+# Gestión de usuarios
 # -----------------------------------------------------------------------------
 
 def get_user_by_username(username: str) -> dict | None:
     """
-    Busca un usuario por nombre. Retorna dict con
-    {id, username, password_hash, role} o None si no existe.
+    Busca un usuario por nombre.
+    Retorna dict {id, username, password_hash, role} o None si no existe.
     """
-    query = """
+    sql = """
         SELECT u.id, u.username, u.password_hash, r.name AS role
         FROM users u
         JOIN roles r ON u.role_id = r.id
@@ -78,7 +135,7 @@ def get_user_by_username(username: str) -> dict | None:
     try:
         conn   = get_connection()
         cursor = conn.cursor(dictionary=True)
-        cursor.execute(query, (username,))
+        cursor.execute(sql, (username,))
         return cursor.fetchone()
     except MySQLError as e:
         logger.error(f"Error al consultar usuario '{username}': {e}")
@@ -89,10 +146,6 @@ def get_user_by_username(username: str) -> dict | None:
 
 
 def get_role_id_by_name(role_name: str) -> int | None:
-    """
-    Obtiene el ID de un rol por su nombre ('user' o 'admin').
-    Retorna el ID o None si el rol no existe.
-    """
     conn = cursor = None
     try:
         conn   = get_connection()
@@ -110,32 +163,23 @@ def get_role_id_by_name(role_name: str) -> int | None:
 
 def create_user(username: str, password_hash: str, role_name: str) -> dict:
     """
-    Inserta un nuevo usuario en la base de datos.
-
-    La contraseña ya llega hasheada con bcrypt desde auth.py.
-    NUNCA se almacena ni se recibe la contraseña en texto plano aquí.
-
-    Retorna:
-      {"success": True}                        → usuario creado
-      {"success": False, "error": "..."}       → error (ya existe, rol inválido, etc.)
+    Inserta un nuevo usuario. La contraseña ya llega hasheada con bcrypt.
+    NUNCA se almacena ni se recibe la contraseña en texto plano aqui.
     """
-    # Obtener ID del rol
     role_id = get_role_id_by_name(role_name)
     if role_id is None:
         return {"success": False, "error": f"Rol '{role_name}' no existe en la BD."}
 
-    query  = "INSERT INTO users (username, password_hash, role_id) VALUES (%s, %s, %s)"
+    sql    = "INSERT INTO users (username, password_hash, role_id) VALUES (%s, %s, %s)"
     conn   = cursor = None
     try:
         conn   = get_connection()
         cursor = conn.cursor()
-        cursor.execute(query, (username, password_hash, role_id))
+        cursor.execute(sql, (username, password_hash, role_id))
         conn.commit()
         logger.info(f"Usuario '{username}' creado con rol '{role_name}'.")
         return {"success": True}
-
     except mysql.connector.IntegrityError:
-        # username UNIQUE → ya existe
         return {"success": False, "error": f"El usuario '{username}' ya existe."}
     except MySQLError as e:
         logger.error(f"Error al crear usuario '{username}': {e}")
@@ -145,122 +189,11 @@ def create_user(username: str, password_hash: str, role_name: str) -> dict:
         if conn:   conn.close()
 
 
-
-
-# -----------------------------------------------------------------------------
-# Gestión de camiones
-# -----------------------------------------------------------------------------
-
-def get_all_trucks() -> list:
-    """
-    Devuelve la lista completa de camiones de la flota.
-    Retorna lista de dicts {id, code, truck_id, description, status, location}
-    o lista vacía si hay error.
-    """
-    conn = cursor = None
-    try:
-        conn   = get_connection()
-        cursor = conn.cursor(dictionary=True)
-        cursor.execute(
-            "SELECT id, code, truck_id, description, status, location "
-            "FROM trucks ORDER BY code"
-        )
-        return cursor.fetchall()
-    except MySQLError as e:
-        logger.error(f"Error al obtener camiones: {e}")
-        return []
-    finally:
-        if cursor: cursor.close()
-        if conn:   conn.close()
-
-
-def get_truck_by_query(query: str) -> dict | None:
-    """
-    Busca un camión por código corto (T001) o por ID completo (TRUCK-001).
-    Retorna dict o None si no existe.
-    """
-    conn = cursor = None
-    try:
-        conn   = get_connection()
-        cursor = conn.cursor(dictionary=True)
-        # UPPER() en SQL garantiza coincidencia sin importar cómo
-        # esté almacenado el valor ni la collation de la columna.
-        cursor.execute(
-            "SELECT id, code, truck_id, description, status, location "
-            "FROM trucks WHERE UPPER(code) = %s OR UPPER(truck_id) = %s LIMIT 1",
-            (query.strip().upper(), query.strip().upper())
-        )
-        return cursor.fetchone()
-    except MySQLError as e:
-        logger.error(f"Error al buscar camión '{query}': {e}")
-        return None
-    finally:
-        if cursor: cursor.close()
-        if conn:   conn.close()
-
-
-def create_truck(code: str, truck_id: str, description: str,
-                 status: str = "available", location: str = "Sin asignar") -> dict:
-    """
-    Inserta un nuevo camión en la base de datos.
-    Retorna {"success": True} o {"success": False, "error": "..."}.
-    """
-    query = ("INSERT INTO trucks (code, truck_id, description, status, location) "
-             "VALUES (%s, %s, %s, %s, %s)")
-    conn = cursor = None
-    try:
-        conn   = get_connection()
-        cursor = conn.cursor()
-        cursor.execute(query, (code.upper(), truck_id.upper(), description, status, location))
-        conn.commit()
-        logger.info(f"Camión '{truck_id}' creado con código '{code}'.")
-        return {"success": True}
-    except mysql.connector.IntegrityError:
-        return {"success": False, "error": f"El código '{code}' o el ID '{truck_id}' ya existe."}
-    except MySQLError as e:
-        logger.error(f"Error al crear camión: {e}")
-        return {"success": False, "error": "Error interno al crear el camión."}
-    finally:
-        if cursor: cursor.close()
-        if conn:   conn.close()
-
-
-def delete_truck(query: str) -> dict:
-    """
-    Elimina un camión por código (T001) o ID completo (TRUCK-001).
-    Retorna {"success": True, "truck_id": "..."} o {"success": False, "error": "..."}.
-    """
-    # Primero verificar que existe
-    truck = get_truck_by_query(query)
-    if not truck:
-        return {"success": False, "error": f"Camión '{query}' no encontrado."}
-
-    conn = cursor = None
-    try:
-        conn   = get_connection()
-        cursor = conn.cursor()
-        cursor.execute("DELETE FROM trucks WHERE id = %s", (truck["id"],))
-        conn.commit()
-        logger.info(f"Camión '{truck['truck_id']}' eliminado.")
-        return {"success": True, "truck_id": truck["truck_id"], "code": truck["code"]}
-    except MySQLError as e:
-        logger.error(f"Error al eliminar camión '{query}': {e}")
-        return {"success": False, "error": "Error interno al eliminar el camión."}
-    finally:
-        if cursor: cursor.close()
-        if conn:   conn.close()
-
-
-# -----------------------------------------------------------------------------
-# Gestión de usuarios (para el comando delete_user de admin)
-# -----------------------------------------------------------------------------
-
-PROTECTED_USERS = {"admin"}   # Usuarios que nunca se pueden eliminar
-
 def get_all_users() -> list:
     """
-    Devuelve la lista de usuarios con su rol.
     Retorna lista de dicts {id, username, role, created_at}.
+    created_at se convierte a string para ser JSON-serializable.
+    Lista vacia si hay error de BD.
     """
     conn = cursor = None
     try:
@@ -271,7 +204,8 @@ def get_all_users() -> list:
             "FROM users u JOIN roles r ON u.role_id = r.id "
             "ORDER BY u.username"
         )
-        return cursor.fetchall()
+        rows = cursor.fetchall()
+        return [_row_to_json(r) for r in rows]
     except MySQLError as e:
         logger.error(f"Error al obtener usuarios: {e}")
         return []
@@ -282,12 +216,12 @@ def get_all_users() -> list:
 
 def delete_user(username: str) -> dict:
     """
-    Elimina un usuario por nombre de usuario.
-    Nunca permite eliminar usuarios en PROTECTED_USERS.
-    Retorna {"success": True} o {"success": False, "error": "..."}.
+    Elimina un usuario por nombre.
+    Nunca elimina usuarios en PROTECTED_USERS.
     """
     if username.lower() in {u.lower() for u in PROTECTED_USERS}:
-        return {"success": False, "error": f"El usuario '{username}' es el administrador principal y no puede eliminarse."}
+        return {"success": False,
+                "error": f"El usuario '{username}' es el administrador principal y no puede eliminarse."}
 
     conn = cursor = None
     try:
@@ -306,6 +240,156 @@ def delete_user(username: str) -> dict:
         if cursor: cursor.close()
         if conn:   conn.close()
 
+
+# -----------------------------------------------------------------------------
+# Gestión de camiones — modelo Fase 2
+# Campos: id, plate_number, model, capacity_kg, status,
+#         current_location, created_at, updated_at
+# -----------------------------------------------------------------------------
+
+def get_all_trucks() -> list | None:
+    """
+    Devuelve la lista completa de camiones.
+    Retorna:
+      list  → OK (puede ser [] si la flota esta vacia)
+      None  → error de base de datos
+    Los campos datetime se convierten a string para ser JSON-serializables.
+    """
+    conn = cursor = None
+    try:
+        conn   = get_connection()
+        cursor = conn.cursor(dictionary=True)
+        cursor.execute(
+            "SELECT id, plate_number, model, capacity_kg, "
+            "status, current_location, created_at, updated_at "
+            "FROM trucks ORDER BY plate_number"
+        )
+        rows = cursor.fetchall()
+        return [_row_to_json(r) for r in rows]
+    except MySQLError as e:
+        logger.error(f"Error al obtener camiones: {e}")
+        return None
+    finally:
+        if cursor: cursor.close()
+        if conn:   conn.close()
+
+
+def get_truck_by_query(query: str) -> dict | None:
+    """
+    Busca un camion por matricula (insensible a mayusculas).
+    Retorna dict completo del camion o None si no existe o hay error.
+    Los campos datetime se convierten a string.
+    """
+    conn = cursor = None
+    try:
+        conn   = get_connection()
+        cursor = conn.cursor(dictionary=True)
+        cursor.execute(
+            "SELECT id, plate_number, model, capacity_kg, "
+            "status, current_location, created_at, updated_at "
+            "FROM trucks WHERE UPPER(plate_number) = %s LIMIT 1",
+            (query.strip().upper(),)
+        )
+        row = cursor.fetchone()
+        return _row_to_json(row) if row else None
+    except MySQLError as e:
+        logger.error(f"Error al buscar camion '{query}': {e}")
+        return None
+    finally:
+        if cursor: cursor.close()
+        if conn:   conn.close()
+
+
+def create_truck(plate_number: str, model: str, capacity_kg: int,
+                 status: str = "available",
+                 current_location: str = None) -> dict:
+    """
+    Inserta un nuevo camion. Normaliza la matricula a mayusculas.
+    Retorna {"success": True} o {"success": False, "error": "..."}.
+    """
+    sql = (
+        "INSERT INTO trucks (plate_number, model, capacity_kg, status, current_location) "
+        "VALUES (%s, %s, %s, %s, %s)"
+    )
+    conn = cursor = None
+    try:
+        conn   = get_connection()
+        cursor = conn.cursor()
+        cursor.execute(sql, (plate_number.strip().upper(), model.strip(),
+                             capacity_kg, status, current_location))
+        conn.commit()
+        logger.info(f"Camion '{plate_number.upper()}' ({model}) creado.")
+        return {"success": True}
+    except mysql.connector.IntegrityError:
+        return {"success": False,
+                "error": f"La matricula '{plate_number.upper()}' ya existe en el sistema."}
+    except MySQLError as e:
+        logger.error(f"Error al crear camion '{plate_number}': {e}")
+        return {"success": False, "error": "Error interno al crear el camion."}
+    finally:
+        if cursor: cursor.close()
+        if conn:   conn.close()
+
+
+def update_truck(plate_number: str, model: str, capacity_kg: int,
+                 status: str, current_location: str | None) -> dict:
+    """
+    Actualiza model, capacity_kg, status y current_location de un camion.
+    Retorna {"success": True} o {"success": False, "error": "..."}.
+    """
+    sql = (
+        "UPDATE trucks "
+        "SET model = %s, capacity_kg = %s, status = %s, "
+        "    current_location = %s, updated_at = NOW() "
+        "WHERE UPPER(plate_number) = %s"
+    )
+    conn = cursor = None
+    try:
+        conn   = get_connection()
+        cursor = conn.cursor()
+        cursor.execute(sql, (model.strip(), capacity_kg, status,
+                             current_location, plate_number.strip().upper()))
+        if cursor.rowcount == 0:
+            return {"success": False,
+                    "error": f"Camion '{plate_number.upper()}' no encontrado."}
+        conn.commit()
+        logger.info(f"Camion '{plate_number.upper()}' actualizado.")
+        return {"success": True}
+    except MySQLError as e:
+        logger.error(f"Error al actualizar camion '{plate_number}': {e}")
+        return {"success": False, "error": "Error interno al actualizar el camion."}
+    finally:
+        if cursor: cursor.close()
+        if conn:   conn.close()
+
+
+def delete_truck(query: str) -> dict:
+    """
+    Elimina un camion por matricula.
+    Retorna {"success": True, "plate_number": "..."} o
+            {"success": False, "error": "..."}.
+    """
+    truck = get_truck_by_query(query)
+    if not truck:
+        return {"success": False,
+                "error": f"Camion '{query.upper()}' no encontrado."}
+
+    conn = cursor = None
+    try:
+        conn   = get_connection()
+        cursor = conn.cursor()
+        cursor.execute("DELETE FROM trucks WHERE id = %s", (truck["id"],))
+        conn.commit()
+        logger.info(f"Camion '{truck['plate_number']}' eliminado.")
+        return {"success": True, "plate_number": truck["plate_number"]}
+    except MySQLError as e:
+        logger.error(f"Error al eliminar camion '{query}': {e}")
+        return {"success": False, "error": "Error interno al eliminar el camion."}
+    finally:
+        if cursor: cursor.close()
+        if conn:   conn.close()
+
+
 # -----------------------------------------------------------------------------
 # Auditoría
 # -----------------------------------------------------------------------------
@@ -313,23 +397,98 @@ def delete_user(username: str) -> dict:
 def log_event(event_type: str, user_id: int = None,
               detail: str = None, ip_address: str = None) -> None:
     """
-    Registra un evento en audit_logs. Falla en silencio.
+    Registra un evento en audit_logs. Falla en silencio para no interrumpir el flujo.
 
-    Tipos usados:
-      LOGIN_OK / LOGIN_FAIL / COMMAND / ACCESS_DENIED / USER_CREATED
+    Tipos de evento:
+      CLIENT_CONNECT / CLIENT_DISCONNECT
+      LOGIN_OK / LOGIN_FAIL / LOGOUT
+      COMMAND / ACCESS_DENIED / SERVER_ERROR
+      TRUCK_LISTED / TRUCK_DETAIL
+      TRUCK_CREATED / TRUCK_UPDATED / TRUCK_DELETED
+      USER_CREATED / USER_DELETED
     """
-    query  = """
+    sql  = """
         INSERT INTO audit_logs (user_id, event_type, detail, ip_address)
         VALUES (%s, %s, %s, %s)
     """
-    conn   = cursor = None
+    conn = cursor = None
     try:
         conn   = get_connection()
         cursor = conn.cursor()
-        cursor.execute(query, (user_id, event_type, detail, ip_address))
+        cursor.execute(sql, (user_id, event_type, detail, ip_address))
         conn.commit()
     except MySQLError as e:
-        logger.error(f"Error al registrar auditoría: {e}")
+        logger.error(f"Error al registrar auditoria ({event_type}): {e}")
+    finally:
+        if cursor: cursor.close()
+        if conn:   conn.close()
+
+
+def get_audit_logs(limit: int = 50) -> list:
+    """
+    Devuelve los ultimos 'limit' registros de audit_logs con el username resuelto.
+    Los eventos de sistema (sin user_id) muestran 'sistema' como username.
+    Retorna lista vacia si hay error de BD.
+    """
+    sql = """
+        SELECT
+            a.id,
+            COALESCE(u.username, 'sistema') AS username,
+            a.event_type,
+            a.detail,
+            a.ip_address,
+            a.created_at
+        FROM audit_logs a
+        LEFT JOIN users u ON a.user_id = u.id
+        ORDER BY a.created_at DESC
+        LIMIT %s
+    """
+    conn = cursor = None
+    try:
+        conn   = get_connection()
+        cursor = conn.cursor(dictionary=True)
+        cursor.execute(sql, (int(limit),))
+        rows = cursor.fetchall()
+        logger.info(f"Auditoria consultada: {len(rows)} registro(s) (limit={limit}).")
+        return [_row_to_json(r) for r in rows]
+    except MySQLError as e:
+        logger.error(f"Error al obtener audit_logs: {e}")
+        return []
+    finally:
+        if cursor: cursor.close()
+        if conn:   conn.close()
+
+
+def get_audit_logs_by_user(username: str, limit: int = 50) -> list:
+    """
+    Devuelve los ultimos 'limit' registros de audit_logs para el usuario indicado.
+    Retorna lista vacia si no hay registros o hay error de BD.
+    """
+    sql = """
+        SELECT
+            a.id,
+            COALESCE(u.username, 'sistema') AS username,
+            a.event_type,
+            a.detail,
+            a.ip_address,
+            a.created_at
+        FROM audit_logs a
+        LEFT JOIN users u ON a.user_id = u.id
+        WHERE u.username = %s
+        ORDER BY a.created_at DESC
+        LIMIT %s
+    """
+    conn = cursor = None
+    try:
+        conn   = get_connection()
+        cursor = conn.cursor(dictionary=True)
+        cursor.execute(sql, (username, int(limit)))
+        rows = cursor.fetchall()
+        logger.info(f"Auditoria filtrada por '{username}': {len(rows)} registro(s).")
+        return [_row_to_json(r) for r in rows]
+    except MySQLError as e:
+        logger.error(f"Error al filtrar audit_logs por '{username}': {e}")
+        return []
     finally:
         if cursor: cursor.close()
         if conn:   conn.close()

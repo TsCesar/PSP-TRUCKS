@@ -137,6 +137,54 @@
 
 ---
 
+---
+
+### [28-abr] Fase 2 — CRUD de camiones, auditoria admin y revision completa
+
+**Objetivo**: Evolucionar la Fase 1 a un sistema de gestion de flota completo con CRUD real en MySQL, visor de auditoria para admin, y terminal mas profesional.
+
+**Actividades — modelo de datos**:
+- `schema.sql` y `seed.sql`: tabla `trucks` rediseñada (plate_number, model, capacity_kg, status ENUM, current_location, created_at, updated_at).
+- `reset_trucks_phase2.sql`: script de reset seguro para migrar de Fase 1 a Fase 2 sin tocar usuarios ni auditoria.
+- Constraint `CHECK (capacity_kg > 0)` y dos indices (plate_number, status) para integridad y rendimiento.
+
+**Actividades — servidor**:
+- `database.py`: funciones `update_truck()`, `get_audit_logs()`, `get_audit_logs_by_user()`, `validate_trucks_schema()`.
+- `server.py`: `validate_truck_payload()` centralizado para create y update; handlers `handle_list_trucks()`, `handle_truck_detail()`, `handle_create_truck()`, `handle_update_truck()`, `handle_delete_truck()`, `handle_list_audit_logs()`, `handle_filter_audit_logs_by_user()`.
+- `server.py`: `_print_server_banner()` con banner visual al arrancar mostrando host, puerto, MySQL y TLS.
+- `server.py`: `raw_socket.settimeout(1.0)` para Ctrl+C limpio; `SO_REUSEADDR` ya existia.
+- `rbac.py`: `list_audit_logs` y `filter_audit_logs_by_user` añadidos a permisos admin.
+- `_json_default()` en `send_response()` y `_row_to_json()` en database.py para serializar objetos `datetime` de MySQL.
+
+**Actividades — cliente**:
+- `client.py`: acciones `action_list_trucks()`, `action_truck_detail()`, `action_create_truck()`, `action_update_truck()`, `action_delete_truck()`.
+- `client.py`: `read_password_with_asterisks()` con msvcrt en Windows + fallback getpass.
+- `client.py`: `print_audit_logs()`, `action_view_audit()` con submenu (ultimos / filtrar por usuario).
+- `client.py`: `MENU_ADMIN` ampliado con opcion "Ver auditoria" (solo visible para admin).
+- `client.py`: `print_header()` mejorado con doble linea de titulo, marcador de Fase 2, y rol dentro del marco.
+
+**Actividades — documentacion**:
+- `README.md`: reescrito para Fase 2 con esquema trucks correcto, comandos Fase 2, credenciales reales, ejemplos de UI.
+- `docs/arquitectura.md`, `docs/protocolo.md`, `docs/seguridad.md`, `docs/requisitos.md`, `docs/diseno.md`, `docs/manual_usuario.md`: actualizados completamente para Fase 2.
+
+**Defectos detectados y resueltos**:
+
+| # | Descripcion | Causa | Solucion |
+|---|---|---|---|
+| 8 | `TypeError: Object of type datetime is not JSON serializable` | `mysql-connector-python` devuelve objetos `datetime` en columnas TIMESTAMP | `_row_to_json()` en database.py + `_json_default()` en server.py |
+| 9 | `Unknown column 'plate_number' in 'field list'` | Tabla `trucks` de Fase 1 aun en MySQL | Script `reset_trucks_phase2.sql` + `validate_trucks_schema()` al arrancar |
+| 10 | Ctrl+C bloqueaba el servidor indefinidamente | `accept()` bloquea el hilo sin timeout | `raw_socket.settimeout(1.0)` + captura de `socket.timeout` con `continue` |
+| 11 | `handle_list_trucks` nunca detectaba error de BD | `get_all_trucks()` retornaba `[]` en error | Cambiado a retornar `None` en error y `[]` si la flota esta vacia |
+| 12 | Sesion no se limpiaba si ya estaba desautenticada | `handle_server_response` tenia `and session["authenticated"]` | Eliminada la condicion redundante; siempre limpia al recibir `session_expired` |
+
+**Decisiones tecnicas**:
+- `validate_truck_payload()` centralizado evita ~25 lineas duplicadas entre create y update handlers.
+- `MENU_ADMIN` separado de `MENU_USER` permite añadir opciones admin sin modificar el flujo de usuario.
+- `get_all_trucks()` devuelve `None` (error BD) vs `[]` (flota vacia) para que el servidor pueda responder de forma diferente en cada caso.
+- La auditoria de trucks usa eventos especificos (`TRUCK_LISTED`, `TRUCK_DETAIL`, etc.) para mayor trazabilidad, ademas del `COMMAND` generico.
+
+---
+
 ## Resumen de tiempo estimado
 
 | Tarea | Horas |
@@ -148,9 +196,15 @@
 | RBAC + create_user | 3 h |
 | Robustez y UX cliente | 3 h |
 | Auditoría completa | 1 h |
-| Gestión de flota y usuarios | 3 h |
-| Documentación | 3 h |
-| **Total** | **24 h** |
+| Gestion de flota y usuarios (Fase 1) | 3 h |
+| Documentacion Fase 1 | 3 h |
+| Fase 2 — modelo datos (schema, seed, reset) | 2 h |
+| Fase 2 — CRUD camiones servidor | 3 h |
+| Fase 2 — CRUD camiones cliente | 3 h |
+| Fase 2 — auditoria admin | 2 h |
+| Fase 2 — mejoras visuales y robustez | 2 h |
+| Fase 2 — documentacion | 3 h |
+| **Total** | **39 h** |
 
 ---
 
@@ -164,4 +218,9 @@
 | 4 | `openssl` no reconocido | No estaba en PATH | Ruta completa de Git |
 | 5 | `mysql` no reconocido | XAMPP no estaba en PATH | `$env:PATH += ";C:\xampp\mysql\bin"` |
 | 6 | Buffer sin límite | Sin comprobación de tamaño | Límite 64 KB con cierre de conexión |
-| 7 | Sesión cliente no se limpiaba al expirar token | Sin mecanismo de notificación | `session_expired: true` en respuesta del servidor |
+| 7 | Sesion cliente no se limpiaba al expirar token | Sin mecanismo de notificacion | `session_expired: true` en respuesta del servidor |
+| 8 | `TypeError: datetime is not JSON serializable` | MySQL devuelve objetos datetime | `_row_to_json()` + `_json_default()` |
+| 9 | `Unknown column 'plate_number'` | Tabla trucks con esquema Fase 1 | `reset_trucks_phase2.sql` + `validate_trucks_schema()` |
+| 10 | Ctrl+C bloqueaba el servidor | `accept()` sin timeout | `settimeout(1.0)` + captura `socket.timeout` |
+| 11 | `handle_list_trucks` no detectaba error BD | `get_all_trucks()` retornaba `[]` en error | Cambiado a retornar `None` en error |
+| 12 | Sesion no se limpiaba si ya estaba desautenticada | Condicion `and session["authenticated"]` sobrante | Eliminada la condicion redundante |
